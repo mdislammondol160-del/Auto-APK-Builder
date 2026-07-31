@@ -86,11 +86,16 @@ jobs:
           }
           EOF
 
-      - name: Download User Website/ZIP
-        run: |
-          cd app/src/main/assets
-          URL="${{ github.event.inputs.file_url }}"
-          wget -O downloaded_file "$URL"
+         - name: Download User Website/ZIP
+     run: |
+       cd app/src/main/assets
+       wget -O downloaded_file "https://raw.githubusercontent.com/mdn/beginner-html-site-styled/master/index.html"
+       if unzip -q downloaded_file; then
+         rm downloaded_file
+       else
+         mv downloaded_file index.html
+       fi
+
           if unzip -q downloaded_file; then
             rm downloaded_file
           else
