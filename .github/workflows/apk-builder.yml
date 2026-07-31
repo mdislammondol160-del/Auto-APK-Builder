@@ -1,0 +1,107 @@
+name: Auto APK Builder
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_name:
+        description: 'আপনার অ্যাপের নাম দিন:'
+        required: true
+        default: 'My Super App'
+      file_url:
+        description: 'আপনার ZIP বা HTML ফাইলের ডাইরেক্ট ডাউনলোড লিংক দিন:'
+        required: true
+
+jobs:
+  build:
+    name: Build APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Create Android Project Files
+        run: |
+          mkdir -p app/src/main/assets
+          mkdir -p app/src/main/java/com/clean/builder
+          
+          echo "include ':app'" > settings.gradle
+          
+          cat << 'EOF' > build.gradle
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:7.4.2' }
+          }
+          allprojects {
+              repositories { google(); mavenCentral() }
+          }
+          EOF
+          
+          cat << 'EOF' > app/build.gradle
+          apply plugin: 'com.android.application'
+          android {
+              compileSdkVersion 33
+              namespace "com.clean.builder"
+              defaultConfig {
+                  applicationId "com.clean.builder"
+                  minSdkVersion 21
+                  targetSdkVersion 33
+                  versionCode 1
+                  versionName "1.0"
+              }
+          }
+          EOF
+          
+          cat << EOF > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <application android:label="${{ github.event.inputs.app_name }}" android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+          
+          cat << 'EOF' > app/src/main/java/com/clean/builder/MainActivity.java
+          package com.clean.builder;
+          import android.app.Activity; import android.os.Bundle; import android.webkit.WebView; import android.webkit.WebViewClient;
+          public class MainActivity extends Activity {
+              @Override protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  WebView w = new WebView(this);
+                  setContentView(w);
+                  w.getSettings().setJavaScriptEnabled(true);
+                  w.getSettings().setDomStorageEnabled(true);
+                  w.setWebViewClient(new WebViewClient());
+                  w.loadUrl("file:///android_asset/index.html");
+              }
+          }
+          EOF
+
+      - name: Download User Website/ZIP
+        run: |
+          cd app/src/main/assets
+          URL="${{ github.event.inputs.file_url }}"
+          wget -O downloaded_file "$URL"
+          if unzip -q downloaded_file; then
+            rm downloaded_file
+          else
+            mv downloaded_file index.html
+          fi
+
+      - name: Build APK using Gradle
+        run: gradle assembleDebug
+
+      - name: Upload APK for Download
+        uses: actions/upload-artifact@v4
+        with:
+          name: My-App-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
