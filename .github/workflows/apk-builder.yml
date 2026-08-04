@@ -1,73 +1,36 @@
 name: Auto APK Builder
 
 on:
-  workflow_dispatch:
-    inputs:
-      app_name:
-        description: 'আপনার অ্যাপের নাম দিন:'
-        required: true
-        default: 'My Super App'
-      file_url:
-        description: 'আপনার ZIP বা HTML ফাইলের ডাইরেক্ট ডাউনলোড লিংক দিন:'
-        required: true
+  push:
+    branches: [ main, master ]
 
 jobs:
   build:
-    name: Build APK
     runs-on: ubuntu-latest
-
     steps:
-      - name: Setup Java
-        uses: actions/setup-java@v4
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Create Android Project Files
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v2
+
+      - name: Download Gradle Wrapper & Build
         run: |
-          mkdir -p app/src/main/assets
-          mkdir -p app/src/main/java/com/clean/builder
-          
-          echo "include ':app'" > settings.gradle
-          
-          cat << 'EOF' > build.gradle
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:7.4.2' }
-          }
-          allprojects {
-              repositories { google(); mavenCentral() }
-          }
-          EOF
-          
-          cat << 'EOF' > app/build.gradle
-          apply plugin: 'com.android.application'
-          android {
-              compileSdkVersion 33
-              namespace "com.clean.builder"
-              defaultConfig {
-                  applicationId "com.clean.builder"
-                  minSdkVersion 21
-                  targetSdkVersion 33
-                  versionCode 1
-                  versionName "1.0"
-              }
-          }
-          EOF
-          
-          cat << EOF > app/src/main/AndroidManifest.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <application android:label="${{ github.event.inputs.app_name }}" android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
+          gradle wrapper --gradle-version 7.5
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: app-debug
+          path: app/build/outputs/apk/debug/app-debug.apk          </manifest>
           EOF
           
           cat << 'EOF' > app/src/main/java/com/clean/builder/MainActivity.java
